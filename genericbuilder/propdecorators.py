@@ -7,6 +7,7 @@ BaseGenericBuilder (and MetaGenericBuilder)
 __author__ = 'Arjun Rao'
 
 from .tools import get_builder_type
+import copy as cp
 
 class frozen_when_frozen:
     """
@@ -64,7 +65,26 @@ class cached:
             wrap._cached = self._cache_entry_name
             return requires_preprocessed(wrap)
 
+
+class property_setter:
+
+    def __init__(self, propertyname):
+        if not isinstance(propertyname, str):
+            raise ValueError("Argument pased to frozenproperty decorator must be of type 'str'")
+        else:
+            self._propertyname = propertyname
+
+    def __call__(self, func):
+        wrap = cp.copy(func)
+        wrap._property_setter = self._propertyname
+        return wrap
+
+
 def requires_preprocessing(func):
+    """
+    This never needs to be applied directly. (See cached and property_setter
+    (NEED TO WRITE))
+    """
     if not func.__dict__.get('_requires_preprocessing'):
         def wrap(self, *args, **kwargs):
             func(self, *args, **kwargs)
@@ -76,6 +96,7 @@ def requires_preprocessing(func):
         return wrap
     else:
         return func
+
 
 def requires_preprocessed(func):
     if not func.__dict__.get('_requires_preprocessed'):
@@ -90,6 +111,7 @@ def requires_preprocessed(func):
     else:
         return func
 
+
 def requires_rebuild(func):
 
     if not func.__dict__.get('_requires_rebuild'):
@@ -103,6 +125,7 @@ def requires_rebuild(func):
         return wrap
     else:
         return func
+
 
 def requires_built(func):
 
@@ -120,6 +143,7 @@ def requires_built(func):
         return wrap
     else:
         return func
+
 
 def do_not_freeze(func):
     func._do_not_freeze = True

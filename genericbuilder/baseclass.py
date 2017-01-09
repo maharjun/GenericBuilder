@@ -142,8 +142,6 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         requires_generated, and requires_preprocessed are usually used on getters of derived
         properties. To see usage, see any implementation of the Builder class.
 
-        NOTE: As of now, there appears to be an unspoken requirement that. This is essential to avoid unintentional changes to frzen copies created via 
-
         Preprocessing and Building
         **************************
         The processing of the parameters to perform the building is done in 2 steps:
