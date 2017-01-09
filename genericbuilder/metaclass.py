@@ -65,7 +65,7 @@ class MetaGenericBuilder(type):
 
         def get_literal_programming_setter(propertyname):
             def set_property_and_return_func(self, propvalue):
-                self.__setattr__(propertyname, propvalue)
+                dict_[propertyname].__set__(self, propvalue)
                 return self
             return set_property_and_return_func
         
