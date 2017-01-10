@@ -3,8 +3,6 @@ __author__ = 'Arjun Rao'
 import copy as cp
 
 from .metaclass import MetaGenericBuilder
-from .propdecorators import *
-
 
 class BaseGenericBuilder(metaclass=MetaGenericBuilder):
     """
@@ -190,17 +188,20 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         return self
 
     def preprocess(self):
+        self._validate()
         self._preprocess()
         self._is_preprocessed = True
         # Clear All caches
         self._cache = {}
-
         return self
 
     def _build(self):
         pass
 
     def _preprocess(self):
+        pass
+
+    def _validate(self):
         pass
 
     def copy(self):
