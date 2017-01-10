@@ -78,7 +78,11 @@ class MetaGenericBuilder(type):
                     propvalue.__set__(self, prop_dict.pop(propname))
             if bases_:
                  bases_[0].set_properties(self, prop_dict)
-        dict_['set_properties'] = set_properties            
+        dict_['set_properties'] = set_properties
+
+        # Accumulating shallow copy variables from base class, else simply inheriting
+        if bases_ and '_shallow_copied_vars' in dict_:
+            dict_['_shallow_copied_vars'].update(bases_[0]._shallow_copied_vars)
 
         print("In Metaclass")
 

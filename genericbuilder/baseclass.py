@@ -160,6 +160,8 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
 
     builder_type = 'generic'
 
+    _shallow_copied_vars = set()
+
     def __init__(self, conf_dict=None):
         """Constructor for BaseRateGenerator
 
@@ -279,11 +281,14 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
             
             self._is_frozen_copy_valid = True
 
-    def _deep_copy(self):
+    def _deep_copy(self, memodict=None):
         new_obj = type(self).__new__(type(self))
         for key in self.__dict__.keys():
-            if key not in {'_frozen_copy', '_is_frozen_copy_valid'}:
-                new_obj.__dict__[key] = cp.deepcopy(self.__dict__[key])
+            if key not in self._shallow_copied_vars.union({'_frozen_copy', '_is_frozen_copy_valid'}):
+                new_obj.__dict__[key] = cp.deepcopy(self.__dict__[key], memodict)
+            if key in self._shallow_copied_vars:
+                new_obj.__dict__[key] = self.__dict__[key]
+
         return new_obj
 
     def _shallow_copy(self):
@@ -293,6 +298,9 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
             if key not in {'_frozen_copy', '_is_frozen_copy_valid'}:
                 new_obj.__dict__[key] = self.__dict__[key]
         return new_obj
+
+    def __deepcopy__(self, memodict):
+        return self._deep_copy(memodict)
 
     def get_properties(self):
         """
