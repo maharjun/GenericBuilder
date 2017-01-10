@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 setup(
     name="genericbuilder",
-    version="0.4",
+    version="0.5",
     packages=['genericbuilder'],
     author="Arjun Rao",
     author_email="arjun210493@gmail.com",

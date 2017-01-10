@@ -195,6 +195,11 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         self._cache = {}
         return self
 
+    def clear(self):
+        self._clear()
+        self._cache = {}
+        self._is_built = False
+
     def _build(self):
         pass
 
@@ -202,6 +207,9 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         pass
 
     def _validate(self):
+        pass
+
+    def _clear(self):
         pass
 
     def copy(self):
