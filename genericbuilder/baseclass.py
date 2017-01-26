@@ -158,8 +158,6 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
 
     builder_type = 'generic'
 
-    _shallow_copied_vars = set()
-
     def __init__(self, conf_dict=None):
         """Constructor for BaseRateGenerator
 
@@ -170,29 +168,47 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         self._is_frozen = False
         self._is_built = False
         self._is_preprocessed = False
-        self._is_frozen_copy_valid = False
         self._frozen_copy = False
-        self._is_view = False
+        self._is_mutable = True
+        self._cache = {}
 
     def build(self):
         """Performs build"""
-        if not self._is_frozen:
+        if self._is_mutable:
+            if not self._is_frozen:
+                to_build = True
+            elif not self._is_built:
+                to_build = True
+            else:
+                to_build = False
+        else:
+            raise TypeError("Cannot Build Immutable Builder")
+
+        if to_build:
             if not self._is_preprocessed:
                 self.preprocess()
             self._cache = {}
             self._build()
             self._is_built = True
-        else:
-            # Do nothing. frozen builder is already in built state
-            pass
+
         return self
 
+    def copy_rebuilt(self):
+        new_obj = self.copy_mutable()
+        new_obj.build()
+        if not self._is_mutable:
+            new_obj = new_obj.copy_immutable()
+        return new_obj
+
     def preprocess(self):
-        self._validate()
-        self._preprocess()
-        self._is_preprocessed = True
-        # Clear All caches
-        self._cache = {}
+        if self._is_mutable:
+            self._validate()
+            self._preprocess()
+            self._is_preprocessed = True
+            # Clear All caches
+            self._cache = {}
+        else:
+            raise TypeError("Cannot run preprocess on Immutable Builder")
         return self
 
     def clear(self):
@@ -216,10 +232,7 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         """
         Returns a Copy of the Generator
         """
-        if self._is_frozen:
-            return self.copy_frozen()
-        else:
-            return self.copy_mutable()
+        return self._shallow_copy()
 
     def copy_frozen(self):
         """
@@ -227,22 +240,13 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         
         NEED TO WRITE DOCUMENTATION AS TO EXACTY HOW THIS WORKS
         """
-        
-        self._generate_frozen_copy()
-        if self._is_frozen and self._is_view:
-            new_obj = self._frozen_copy.copy_frozen()
-        elif self._is_frozen:
-            new_obj = self._shallow_copy()
-            new_obj._is_frozen_copy_valid = False
-            new_obj._frozen_copy = None
-        elif self._is_built:
-            new_obj = self._frozen_copy.copy_frozen()
-        else:
-            raise AttributeError(
-                "A frozen copy cannot be created for a Builder which"
-                " has not built consistent to input parameters Make"
-                " sure you run build().")
+        new_obj = self._shallow_copy()
+        new_obj._is_frozen = True
+        return new_obj
 
+    def copy_unfrozen(self):
+        new_obj = self._shallow_copy()
+        new_obj._is_frozen = False
         return new_obj
 
     def copy_mutable(self):
@@ -250,66 +254,23 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         Returns a changing (non-frozen) copy of the current generator. Performs deep copy of
         __dict__
         """
-        new_obj = self._deep_copy()
-        new_obj._is_frozen = False
-        return new_obj
-
-    def frozen_view(self):
-        """
-        Returns a frozen (RO) view of the rate generator. This is not guaranteed to
-        remain consistent across calls to functions of the original RateBuilder. If
-        that is required, then use one of the copy functions. This function performs
-        no reallocation of memory
-        """
         new_obj = self._shallow_copy()
-        new_obj._is_frozen = True
-        new_obj._is_frozen_copy_valid = False
-        new_obj._is_view = True
-        new_obj._frozen_copy = None
+        new_obj._is_mutable = True
         return new_obj
 
-    def _generate_frozen_copy(self):
-        if not self._is_frozen_copy_valid:
-            if self._is_frozen and self._is_view:
-                self._frozen_copy = self._deep_copy()
-                self._frozen_copy._is_frozen_copy_valid = False
-                self._frozen_copy._frozen_copy = None
-                self._frozen_copy._is_view = False
-            elif self._is_frozen:
-                pass
-            elif self._is_built:
-                self._frozen_copy = self._deep_copy()
-                self._frozen_copy._is_frozen_copy_valid = False
-                self._frozen_copy._frozen_copy = None
-                self._frozen_copy._is_frozen = True
-            else:
-                raise AttributeError(
-                    "A frozen copy cannot be created for a Builder which"
-                    " has not built consistent to input parameters Make"
-                    " sure you run build().")
-            
-            self._is_frozen_copy_valid = True
-
-    def _deep_copy(self, memodict=None):
-        new_obj = type(self).__new__(type(self))
-        for key in self.__dict__.keys():
-            if key not in self._shallow_copied_vars.union({'_frozen_copy', '_is_frozen_copy_valid'}):
-                new_obj.__dict__[key] = cp.deepcopy(self.__dict__[key], memodict)
-            if key in self._shallow_copied_vars:
-                new_obj.__dict__[key] = self.__dict__[key]
-
+    def copy_immutable(self):
+        if not self._is_preprocessed:
+            self.preprocess()
+        new_obj = self._shallow_copy()
+        new_obj._is_mutable = False
         return new_obj
 
     def _shallow_copy(self):
 
         new_obj = type(self).__new__(type(self))
-        for key in self.__dict__.keys():
-            if key not in {'_frozen_copy', '_is_frozen_copy_valid'}:
-                new_obj.__dict__[key] = self.__dict__[key]
+        new_obj.__dict__ = self.__dict__.copy()
+        new_obj.__dict__['_cache'] = self.__dict__['_cache'].copy()
         return new_obj
-
-    def __deepcopy__(self, memodict):
-        return self._deep_copy(memodict)
 
     def get_properties(self):
         """
@@ -332,6 +293,7 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
 
         NEED TO WRITE something that metions this inthe baseclass documentation
         """
+
         all_settable_propnames = [
             (propname, prop)
             for propname, prop in self.__dict__
@@ -354,3 +316,10 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
     def is_preprocessed(self):
         return self._is_preprocessed
     
+    @property
+    def is_mutable(self):
+        return self._is_mutable
+
+    def _init_attr(self, att_name, init_value):
+        if not hasattr(self, att_name):
+            setattr(self, att_name, init_value)

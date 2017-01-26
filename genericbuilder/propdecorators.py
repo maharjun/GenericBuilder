@@ -38,6 +38,28 @@ class frozen_when_frozen:
             wrap.__doc__ = func.__doc__
             return wrap
 
+class non_const:
+
+    def __init__(self, propertyname):
+        if not isinstance(propertyname, str):
+            raise ValueError("Argument pased to frozenproperty decorator must be of type 'str'")
+        else:
+            self._propertyname = propertyname
+
+    def __call__(self, func):
+        def wrap(s, *args, **kwargs):
+            if s._is_mutable:
+                retval = func(s, *args, **kwargs)
+            else:
+                raise(ValueError("Immutable {} builder cannot modify '{}'".format(get_builder_type(s),
+                                                                                  self._propertyname)))
+            return retval
+            
+        wrap.__dict__ = func.__dict__.copy()
+        wrap.__doc__ = func.__doc__
+        return wrap
+
+
 class cached:
 
     def __init__(self, cache_entry_name):

@@ -1,6 +1,6 @@
 __author__ = 'Arjun Rao'
 
-from .propdecorators import frozen_when_frozen, requires_preprocessing
+from .propdecorators import frozen_when_frozen, requires_preprocessing, non_const
 
 class MetaGenericBuilder(type):
     """
@@ -9,10 +9,10 @@ class MetaGenericBuilder(type):
     implements the following.
     
     1.  Checks if the `_build` method is implemented by the class
-    2.  All property setters not explicitly marked with the @do_not_freeze decorator
-        are decorated such that they raise an exception if set on a frozen builder
-    3.  For each settable property, a function with_<propname> is created that sets
-        the property and returns self allowing for literal programming.
+    2.  All functions and property setters marked with requires_rebuild are
+        decorated such that they raise an exception if set on a frozen builder
+    3.  For each settable property, a function with_<propname> is created that
+        sets the property and returns self allowing for literal programming.
 
     """
 
@@ -39,6 +39,7 @@ class MetaGenericBuilder(type):
         # 1.  There is a with_.. function
         # 2.  Requirement for preprocessing is signalled
         # 3.  The properties are frozen as needed (see do_not_freeze)
+        # 4.  They are marked as non_const i.e. cannot be run on immutable builders
     
         def get_with_prefix_setter(setterfunc):
             def set_property_and_return_func(self, *args, **kwargs):
@@ -47,13 +48,16 @@ class MetaGenericBuilder(type):
             return set_property_and_return_func
         
         for propname, prop in all_settable_properties:
-            proptemp = prop.setter(requires_preprocessing(prop.fset))
-            proptemp = proptemp.setter(frozen_when_frozen(propname)(proptemp.fset))
+            propsetter = requires_preprocessing(prop.fset)
+            propsetter = frozen_when_frozen(propname)(propsetter)
+            propsetter = non_const(propname)(propsetter)
+            proptemp = prop.setter(propsetter)
             dict_[propname] = proptemp
             dict_["with_{}".format(propname)] = get_with_prefix_setter(proptemp.fset)
         for funcname, func in all_property_setter_funcs:
             functemp = requires_preprocessing(func)
             functemp = frozen_when_frozen(functemp._property_setter)(functemp)
+            functemp = non_const(functemp._property_setter)(functemp)
             dict_[funcname] = functemp
             dict_["with_{}".format(funcname)] = get_with_prefix_setter(functemp)
 
@@ -79,10 +83,6 @@ class MetaGenericBuilder(type):
             if bases_:
                  bases_[0].set_properties(self, prop_dict)
         dict_['set_properties'] = set_properties
-
-        # Accumulating shallow copy variables from base class, else simply inheriting
-        if bases_ and '_shallow_copied_vars' in dict_:
-            dict_['_shallow_copied_vars'].update(bases_[0]._shallow_copied_vars)
 
         # print("In Metaclass")
 
