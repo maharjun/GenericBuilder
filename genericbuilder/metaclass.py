@@ -1,6 +1,7 @@
 __author__ = 'Arjun Rao'
 
-from .propdecorators import frozen_when_frozen, requires_preprocessing, non_const
+from .propdecorators import _requires_preprocessing, _requires_rebuild
+from .propdecorators import frozen_when_frozen, non_const
 
 class MetaGenericBuilder(type):
     """
@@ -37,29 +38,49 @@ class MetaGenericBuilder(type):
 
         # Ensure that for every property setter,
         # 1.  There is a with_.. function
-        # 2.  Requirement for preprocessing is signalled
-        # 3.  The properties are frozen as needed (see do_not_freeze)
-        # 4.  They are marked as non_const i.e. cannot be run on immutable builders
+        # 2.  There is a copy_with_... function
+        # 3.  Requirement for preprocessing is signalled
+        # 4.  Requirement for rebuilding is signalled (except for those functions marked
+        #     with doesnt_require_rebuild). Note that this exception is handled by the
+        #     decorator
+        # 5.  The properties are frozen as needed (see doesnt_require_rebuild)
+        # 6.  They are marked as non_const i.e. cannot be run on immutable builders
     
         def get_with_prefix_setter(setterfunc):
             def set_property_and_return_func(self, *args, **kwargs):
                 setterfunc(self, *args, **kwargs)
                 return self
             return set_property_and_return_func
+
+        def get_copy_with_prefix_setter(setterfunc):
+            def set_property_and_return_copy_func(self, *args, **kwargs):
+                new_obj = self.copy_mutable()
+                setterfunc(new_obj, *args, **kwargs)
+                if not self._is_mutable:
+                    return new_obj.copy_immutable()
+                else:
+                    return new_obj
+            return set_property_and_return_copy_func
         
         for propname, prop in all_settable_properties:
-            propsetter = requires_preprocessing(prop.fset)
+            propsetter = _requires_preprocessing(prop.fset)
+            propsetter = _requires_rebuild(propsetter)
             propsetter = frozen_when_frozen(propname)(propsetter)
             propsetter = non_const(propname)(propsetter)
             proptemp = prop.setter(propsetter)
             dict_[propname] = proptemp
             dict_["with_{}".format(propname)] = get_with_prefix_setter(proptemp.fset)
+            dict_["copy_with_{}".format(propname)] = get_copy_with_prefix_setter(proptemp.fset)
+            
         for funcname, func in all_property_setter_funcs:
-            functemp = requires_preprocessing(func)
+            functemp = _requires_preprocessing(func)
+            functemp = _requires_rebuild(functemp)
             functemp = frozen_when_frozen(functemp._property_setter)(functemp)
             functemp = non_const(functemp._property_setter)(functemp)
             dict_[funcname] = functemp
             dict_["with_{}".format(funcname)] = get_with_prefix_setter(functemp)
+            dict_["copy_with_{}".format(funcname)] = get_copy_with_prefix_setter(proptemp.fset)
+
 
         # creating get and set property functions
         all_properties = [(key, val) for key, val in dict_.items() if isinstance(val, property)]
@@ -77,11 +98,12 @@ class MetaGenericBuilder(type):
         def set_properties(self, prop_dict):
             # unlike get, this does not call the base class setter
             # in case of overridden setters. the pop ensures that
+            new_prop_dict = dict(prop_dict)
             for propname, propvalue in all_settable_properties:
-                if propname in prop_dict:
-                    propvalue.__set__(self, prop_dict.pop(propname))
+                if propname in new_prop_dict:
+                    propvalue.__set__(self, new_prop_dict.pop(propname))
             if bases_:
-                 bases_[0].set_properties(self, prop_dict)
+                 bases_[0].set_properties(self, new_prop_dict)
         dict_['set_properties'] = set_properties
 
         # print("In Metaclass")

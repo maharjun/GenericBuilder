@@ -276,14 +276,10 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         """
         Returns a dictionary containing all gettable properties of the object.self
 
-        NEED TO WRITE something that metions this inthe baseclass documentation
+        This function is actually overridden in he metaclass, its only here for
+        documentation purpose
         """
-
-        objectclass = type(self)
-
-        return {propname:objectclass.__getattribute__(propname).__get__(self)
-                for propname, prop in self.__dict__.items()
-                if isinstance(prop, property)}
+        return
 
     def set_properties(self, prop_dict):
         """
@@ -291,17 +287,24 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         of the property should accept the value returned by the get function if
         using the dict returned by get_properties
 
-        NEED TO WRITE something that metions this inthe baseclass documentation
+        This function is actually overridden in he metaclass, its only here for
+        documentation purpose
         """
+        return
 
-        all_settable_propnames = [
-            (propname, prop)
-            for propname, prop in self.__dict__
-            if isinstance(prop, property) and prop.fset is not None]
-
-        for propname, prop in all_settable_propnames:
-            if propname in prop_dict:
-                prop.fset(self, prop_dict[propname])
+    def copy_with(self, prop_dict, mutable=None):
+        """
+        Assign properties as in set_properties and reurn copy with mutability
+        as specified. If unspecified, retains mutability of self. Does NOT
+        mutate the original object
+        """
+        new_obj = self.copy_mutable()
+        new_obj.set_properties(prop_dict)
+        new_obj_is_mutable = self._is_mutable if mutable is None else bool(mutable)
+        if new_obj_is_mutable:
+            return new_obj
+        else:
+            return new_obj.copy_immutable()
 
 
     @property

@@ -13,7 +13,8 @@ class frozen_when_frozen:
     """
     Decorator class: When applied to a property setting function of BaseRateGenerator,
     this enforces that the property is not modified if the Rate generator is forces.
-    this is automatically applied to all properties of the generat
+    this is automatically applied to all properties of the generator. It does not freeze
+    any function that is marked with the doesnt_require_rebuild decorator
     """
 
     def __init__(self, propertyname):
@@ -23,7 +24,7 @@ class frozen_when_frozen:
             self._propertyname = propertyname
 
     def __call__(self, func):
-        if ('_do_not_freeze' in dir(func) and func._do_not_freeze):
+        if ('_requires_rebuild' in dir(func) and not func._requires_rebuild):
             return func
         else:
             def wrap(s, *args, **kwargs):
@@ -39,6 +40,10 @@ class frozen_when_frozen:
             return wrap
 
 class non_const:
+    """
+    This decorator is automatically applied to all property setters. It basically
+    disallows their use if the object is Immutable
+    """
 
     def __init__(self, propertyname):
         if not isinstance(propertyname, str):
@@ -89,7 +94,11 @@ class cached:
 
 
 class property_setter:
-
+    """
+    This class is used to mark any function as a property setter. This is useful for
+    complex property setter functions that cannot be implemented in an assignment
+    statement
+    """
     def __init__(self, propertyname):
         if not isinstance(propertyname, str):
             raise ValueError("Argument pased to frozenproperty decorator must be of type 'str'")
@@ -102,16 +111,16 @@ class property_setter:
         return wrap
 
 
-def requires_preprocessing(func):
+def _requires_preprocessing(func):
     """
-    This never needs to be applied directly. (See cached and property_setter
+    This never needs to be applied directly. Applied to all property setters by default.
+    (See cached and property_setter)
     (NEED TO WRITE))
     """
     if not func.__dict__.get('_requires_preprocessing'):
         def wrap(self, *args, **kwargs):
             func(self, *args, **kwargs)
             self._is_preprocessed = False
-            self._is_frozen_copy_valid = False
         wrap.__dict__ = func.__dict__.copy()
         wrap.__doc__ = func.__doc__
         wrap._requires_preprocessing = True
@@ -121,6 +130,9 @@ def requires_preprocessing(func):
 
 
 def requires_preprocessed(func):
+    """
+    Apply this to any function that depends on a preprocessed state before execution.
+    """
     if not func.__dict__.get('_requires_preprocessed'):
         def wrap(self, *args, **kwargs):
             if not self._is_preprocessed:
@@ -134,13 +146,18 @@ def requires_preprocessed(func):
         return func
 
 
-def requires_rebuild(func):
+def _requires_rebuild(func):
+    """
+    This never needs to be used directly. This is applied on all properties by default.
+    use doesnt_require_rebuild if a property setter doesnt need rebuilding. NOTE: This will
+    not overload existing rebuild status and will instead simply do nothing and return the
+    function as is
+    """
 
-    if not func.__dict__.get('_requires_rebuild'):
+    if func.__dict__.get('_requires_rebuild') is None:
         def wrap(self, *args, **kwargs):
             func(self, *args, **kwargs)
             self._is_built = False
-            self._is_frozen_copy_valid = False
         wrap.__dict__ = func.__dict__.copy()
         wrap.__doc__ = func.__doc__
         wrap._requires_rebuild = True
@@ -149,9 +166,27 @@ def requires_rebuild(func):
         return func
 
 
-def requires_built(func):
+def doesnt_require_rebuild(func):
+    """
+    This is used to exlicitly declare that a property setter doesn't require rebuilding.
+    This will also cause the property setter to not be frozen. Note: Dont use this for
+    overriding rebuild status of existing property_setter, this will not do it and will
+    simply quit
+    """
 
-    if not func.__dict__.get('_requires_built'):
+    if func.__dict__.get('_requires_rebuild') is None:
+        wrap = cp.copy(func)
+        wrap._requires_rebuild = False
+        return wrap
+    else:
+        return func
+
+
+def requires_built(func):
+    """
+    Apply this to any function that depends on a built state before execution.
+    """
+    if func.__dict__.get('_requires_built') is None:
         def wrap(self, *args, **kwargs):
             if self._is_built:
                 return func(self, *args, **kwargs)
@@ -165,8 +200,3 @@ def requires_built(func):
         return wrap
     else:
         return func
-
-
-def do_not_freeze(func):
-    func._do_not_freeze = True
-    return func
