@@ -240,6 +240,7 @@ class BaseGenericBuilder(metaclass=MetaGenericBuilder):
         
         NEED TO WRITE DOCUMENTATION AS TO EXACTY HOW THIS WORKS
         """
+        assert self._is_built, "Cannot Create Frozen Copy of Unbuilt Generator"
         new_obj = self._shallow_copy()
         new_obj._is_frozen = True
         return new_obj
