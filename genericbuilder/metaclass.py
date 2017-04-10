@@ -1,9 +1,9 @@
 __author__ = 'Arjun Rao'
 
-from .propdecorators import _requires_preprocessing, _requires_rebuild
-from .propdecorators import frozen_when_frozen, non_const
+from .propdecorators import prop_getter, prop_setter
+from abc import ABCMeta
 
-class MetaGenericBuilder(type):
+class MetaGenericBuilder(ABCMeta):
     """
     Meta-Class for generic builder classes. To see the list of features of a builder
     class, look at the documentation of base class BaseGenericBuilder. This metaclass
@@ -19,17 +19,9 @@ class MetaGenericBuilder(type):
 
     def __new__(class_, name_, bases_, dict_):
 
-        has_build = '_build' in dict_
+        all_properties = {key:val for key, val in dict_.items()
+                          if isinstance(val, property)}
         
-        if not has_build:
-            raise ValueError("A builder class must implement the _build() method"
-                             " building whatever")
-
-        all_settable_properties = [(key, val) for key, val in dict_.items()
-                                   if isinstance(val, property) and val.fset is not None]
-        all_property_setter_funcs = [(key, val) for key, val in dict_.items()
-                                     if hasattr(val, '_property_setter') and val._property_setter]
-
         # print("for class {} with bases {}: ".format(name_, bases_))
         # print("settable properties:")
         # print('\n'.join([str(x) for x in all_settable_properties]))
@@ -45,67 +37,13 @@ class MetaGenericBuilder(type):
         #     decorator
         # 5.  The properties are frozen as needed (see doesnt_require_rebuild)
         # 6.  They are marked as non_const i.e. cannot be run on immutable builders
-    
-        def get_with_prefix_setter(setterfunc):
-            def set_property_and_return_func(self, *args, **kwargs):
-                setterfunc(self, *args, **kwargs)
-                return self
-            return set_property_and_return_func
 
-        def get_copy_with_prefix_setter(setterfunc):
-            def set_property_and_return_copy_func(self, *args, **kwargs):
-                new_obj = self.copy_mutable()
-                setterfunc(new_obj, *args, **kwargs)
-                if not self._is_mutable:
-                    return new_obj.copy_immutable()
-                else:
-                    return new_obj
-            return set_property_and_return_copy_func
-        
-        for propname, prop in all_settable_properties:
-            propsetter = _requires_preprocessing(prop.fset)
-            propsetter = _requires_rebuild(propsetter)
-            propsetter = frozen_when_frozen(propname)(propsetter)
-            propsetter = non_const(propname)(propsetter)
-            proptemp = prop.setter(propsetter)
-            dict_[propname] = proptemp
-            dict_["with_{}".format(propname)] = get_with_prefix_setter(proptemp.fset)
-            dict_["copy_with_{}".format(propname)] = get_copy_with_prefix_setter(proptemp.fset)
-            
-        for funcname, func in all_property_setter_funcs:
-            functemp = _requires_preprocessing(func)
-            functemp = _requires_rebuild(functemp)
-            functemp = frozen_when_frozen(functemp._property_setter)(functemp)
-            functemp = non_const(functemp._property_setter)(functemp)
-            dict_[funcname] = functemp
-            dict_["with_{}".format(funcname)] = get_with_prefix_setter(functemp)
-            dict_["copy_with_{}".format(funcname)] = get_copy_with_prefix_setter(proptemp.fset)
+        for propname, prop in all_properties.items():
+            propsetter = prop_setter(prop.fset) if prop.fset is not None else None
+            propgetter = prop_getter(prop.fget) if prop.fget is not None else None
+            all_properties[propname] = prop.setter(propsetter).getter(propgetter)
 
-
-        # creating get and set property functions
-        all_properties = [(key, val) for key, val in dict_.items() if isinstance(val, property)]
-        def get_properties(self):
-            if bases_:
-                prop_dict = bases_[0].get_properties(self)
-            else:
-                prop_dict = {}
-            for propname, propvalue in all_properties:
-                prop_dict[propname] = propvalue.__get__(self)
-            return prop_dict
-        dict_['get_properties'] = get_properties
-
-        all_settable_properties = [(key, val) for key, val in all_properties if val.fset is not None]
-        def set_properties(self, prop_dict):
-            # unlike get, this does not call the base class setter
-            # in case of overridden setters. the pop ensures that
-            new_prop_dict = dict(prop_dict)
-            for propname, propvalue in all_settable_properties:
-                if propname in new_prop_dict:
-                    propvalue.__set__(self, new_prop_dict.pop(propname))
-            if bases_:
-                 bases_[0].set_properties(self, new_prop_dict)
-        dict_['set_properties'] = set_properties
-
+        dict_.update(all_properties)
         # print("In Metaclass")
 
         return super().__new__(class_, name_, bases_, dict_)
